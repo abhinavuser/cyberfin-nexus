@@ -28,6 +28,9 @@ from blockchain.audit_trail import AuditChain, build_audit_trail
 from utils.config import THEME, RISK_THRESHOLDS, ROI_AVG_MULE_RING_LOSS
 from utils.metrics import compute_all_metrics, risk_category, compute_roi
 from utils.gemini_helper import gather_account_context, generate_suspicion_summary, AVAILABLE_MODELS
+from models.ensemble import EnsembleScorer
+from utils.graph_analytics import detect_communities, get_community_summary
+from utils.active_learning import get_review_queue
 
 
 def hex_to_rgba(hex_color, opacity):
@@ -520,9 +523,9 @@ with st.sidebar:
         gemini_model = "gemini-3-flash-preview"
 
 # Create top tab navigation
-tab_overview, tab_graph, tab_fl, tab_attack, tab_audit, tab_alerts = st.tabs([
+tab_overview, tab_graph, tab_fl, tab_attack, tab_audit, tab_alerts, tab_defense = st.tabs([
     "🏠 OVERVIEW", "🕸️ NEXUS GRAPH", "🏦 FEDERATED LEARNING",
-    "⚔️ ATTACK SIMULATION", "🔗 AUDIT TRAIL", "🚨 ALERTS & XAI"
+    "⚔️ ATTACK SIMULATION", "🔗 AUDIT TRAIL", "🚨 ALERTS & XAI", "🧬 DEFENSE ANALYSIS"
 ])
 
 
@@ -1474,6 +1477,219 @@ def page_alerts_xai():
     )
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PAGE: DEFENSE ANALYSIS
+# ══════════════════════════════════════════════════════════════════════════
+
+def page_defense_analysis():
+    st.markdown('<div class="glow-header">🧬 Defense Analysis</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-header">Ensemble scoring, community detection, and active learning for robust mule detection</div>',
+        unsafe_allow_html=True,
+    )
+
+    model, graph, _, scores = load_model_and_graph()
+    data_dict = load_data()
+    account_mask = graph.account_mask.numpy()
+
+    # ── Ensemble Model Breakdown ──────────────────────────────────────
+    st.markdown('<div class="section-header"><h3>🛡️ Ensemble Scoring</h3></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="color:{THEME["text_secondary"]};font-size:0.85rem;margin-bottom:12px">'
+        f'Combines <b>3 independent detection methods</b> to catch loopholes any single model might miss. '
+        f'Accounts flagged by ≥2 methods are elevated for investigation.</div>',
+        unsafe_allow_html=True,
+    )
+
+    ensemble_scorer = EnsembleScorer()
+    features_np = graph.x.numpy()
+    ensemble_result = ensemble_scorer.compute_ensemble(scores, features_np, account_mask)
+
+    e_cols = st.columns(4)
+    ensemble_data = [
+        ("GAT Score", f"{ensemble_result['gat_scores'][account_mask].mean():.3f}",
+         f"Weight: {ensemble_result['weights']['gat']:.0%}", THEME["accent_cyan"]),
+        ("Isolation Forest", f"{ensemble_result['if_scores'][account_mask].mean():.3f}",
+         f"Weight: {ensemble_result['weights']['isolation_forest']:.0%}", THEME["accent_purple"]),
+        ("Rule-Based", f"{ensemble_result['rule_scores'][account_mask].mean():.3f}",
+         f"Weight: {ensemble_result['weights']['rules']:.0%}", THEME["accent_pink"]),
+        ("Consensus ≥2/3",
+         f"{(ensemble_result['consensus'][account_mask] >= 2).sum()}",
+         f"of {account_mask.sum()} accounts", THEME["accent_orange"]),
+    ]
+    for col, (label, value, desc, color) in zip(e_cols, ensemble_data):
+        with col:
+            st.markdown(
+                f'<div class="metric-card">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="background:linear-gradient(135deg,{color},{THEME["accent_cyan"]});'
+                f'-webkit-background-clip:text;-webkit-text-fill-color:transparent">{value}</div>'
+                f'<div style="color:{THEME["text_secondary"]};font-size:0.7rem">{desc}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("")
+
+    # Ensemble comparison chart
+    col_chart, col_info = st.columns([3, 2])
+    with col_chart:
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        for label, key, color in [
+            ("GAT", "gat_scores", THEME["accent_cyan"]),
+            ("Isolation Forest", "if_scores", THEME["accent_purple"]),
+            ("Rule-Based", "rule_scores", THEME["accent_pink"]),
+            ("Ensemble", "ensemble_scores", THEME["accent_green"]),
+        ]:
+            vals = ensemble_result[key][account_mask]
+            fig.add_trace(go.Histogram(
+                x=vals, name=label, opacity=0.6,
+                marker_color=color, nbinsx=30,
+            ))
+        fig.update_layout(
+            title="Score Distribution by Method",
+            barmode="overlay",
+            plot_bgcolor=THEME["bg_card"],
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=THEME["text_primary"]),
+            height=300,
+            margin=dict(l=10, r=10, t=40, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            xaxis=dict(title="Risk Score", gridcolor=hex_to_rgba(THEME['text_secondary'], 0.12)),
+            yaxis=dict(title="Count", gridcolor=hex_to_rgba(THEME['text_secondary'], 0.12)),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_info:
+        st.markdown('<div class="section-header"><h3>📖 How It Works</h3></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        **Three independent detection methods** catch different fraud patterns:
+
+        🔵 **GAT** (60%) — Graph neural network propagates risk across account-device connections
+
+        🟣 **Isolation Forest** (20%) — Statistical anomaly detector on the 12-dim feature vectors
+
+        🔴 **Rule-Based** (20%) — Domain expert rules: new account + high velocity, low balance + large amounts, etc.
+
+        **Consensus**: If ≥2 of 3 methods flag an account as risky (score > 0.5), it's elevated for investigation.
+        """)
+
+    st.markdown("")
+
+    # ── Community Detection ───────────────────────────────────────────
+    st.markdown('<div class="section-header"><h3>🔎 Community Detection — Unknown Ring Discovery</h3></div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="color:{THEME["text_secondary"]};font-size:0.85rem;margin-bottom:12px">'
+        f'Louvain community detection discovers <b>account clusters</b> in the transaction graph. '
+        f'Cross-bank clusters with high average risk may indicate <b>unknown mule rings</b> the model hasn\'t seen before.</div>',
+        unsafe_allow_html=True,
+    )
+
+    communities = detect_communities(graph, scores)
+    comm_summary = get_community_summary(communities)
+
+    cc1, cc2, cc3, cc4 = st.columns(4)
+    comm_metrics = [
+        ("Communities Found", str(comm_summary["total"]), THEME["accent_cyan"]),
+        ("Suspicious Clusters", str(comm_summary["suspicious"]), THEME["accent_pink"]),
+        ("Cross-Bank Rings", str(comm_summary["cross_bank"]), THEME["accent_orange"]),
+        ("Avg Cluster Size", str(comm_summary["avg_size"]), THEME["accent_green"]),
+    ]
+    for col, (label, value, color) in zip([cc1, cc2, cc3, cc4], comm_metrics):
+        with col:
+            st.markdown(
+                f'<div class="metric-card">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="color:{color}">{value}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    if communities:
+        st.markdown(f'<div style="color:{THEME["text_secondary"]};font-size:0.85rem;margin:8px 0">'
+                    f'Top suspicious clusters ranked by suspicion score:</div>', unsafe_allow_html=True)
+        for comm in communities[:5]:
+            sus_color = THEME["risk_critical"] if comm["suspicion_score"] > 0.5 else (
+                THEME["risk_medium"] if comm["suspicion_score"] > 0.3 else THEME["risk_low"])
+            banks_str = ", ".join(f"Bank {b}" for b in comm["banks"])
+            members_preview = ", ".join(comm["account_members"][:4])
+            if len(comm["account_members"]) > 4:
+                members_preview += f" +{len(comm['account_members']) - 4} more"
+
+            st.markdown(
+                f'<div style="background:rgba(0,0,0,0.3);border:1px solid {sus_color}33;'
+                f'border-radius:10px;padding:12px;margin:6px 0">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                f'<span style="color:{THEME["text_primary"]};font-weight:600">'
+                f'Cluster #{comm["community_id"]}</span>'
+                f'<span style="background:{sus_color}22;color:{sus_color};padding:3px 10px;'
+                f'border-radius:12px;font-size:0.75rem;font-weight:600">'
+                f'Suspicion: {comm["suspicion_score"]:.2f}</span></div>'
+                f'<div style="color:{THEME["text_secondary"]};font-size:0.8rem;margin-top:6px">'
+                f'<b>{comm["size"]}</b> accounts | <b>{banks_str}</b> | '
+                f'Avg Risk: <b>{comm["avg_risk"]:.3f}</b> | '
+                f'{comm["high_risk_count"]} high-risk | '
+                f'{"🌐 Cross-bank" if comm["cross_bank"] else "Single bank"}</div>'
+                f'<div style="color:{THEME["text_secondary"]};font-size:0.75rem;margin-top:4px">'
+                f'Members: {members_preview}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("")
+
+    # ── Active Learning Review Queue ──────────────────────────────────
+    st.markdown('<div class="section-header"><h3>🎯 Active Learning — Accounts Needing Review</h3></div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="color:{THEME["text_secondary"]};font-size:0.85rem;margin-bottom:12px">'
+        f'Accounts where the model is <b>most uncertain</b> (risk scores near 0.5). '
+        f'These are prioritized by combining uncertainty, feature suspicion, and neighbor risk.</div>',
+        unsafe_allow_html=True,
+    )
+
+    review_queue = get_review_queue(
+        scores, graph.x.numpy(), account_mask, graph.node_ids, graph_data=graph, max_items=10
+    )
+
+    if review_queue:
+        st.markdown(
+            f'<div style="background:linear-gradient(135deg,rgba(255,140,0,0.08),rgba(0,240,255,0.04));'
+            f'border:1px solid rgba(255,140,0,0.2);border-radius:12px;padding:14px;margin-bottom:12px">'
+            f'<span style="color:{THEME["accent_orange"]};font-weight:700">⚠️ {len(review_queue)} accounts</span>'
+            f'<span style="color:{THEME["text_secondary"]}"> need human review — the model is uncertain '
+            f'about these accounts and contextual signals suggest they deserve investigation.</span></div>',
+            unsafe_allow_html=True,
+        )
+
+        for i, item in enumerate(review_queue):
+            priority_color = THEME["risk_high"] if item["priority"] > 0.4 else (
+                THEME["risk_medium"] if item["priority"] > 0.25 else THEME["accent_cyan"])
+
+            st.markdown(
+                f'<div style="background:rgba(0,0,0,0.3);border:1px solid {priority_color}33;'
+                f'border-radius:10px;padding:12px;margin:6px 0">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                f'<span style="color:{THEME["text_primary"]};font-weight:600">'
+                f'#{i+1} {item["account_id"]}</span>'
+                f'<span style="background:{priority_color}22;color:{priority_color};padding:3px 10px;'
+                f'border-radius:12px;font-size:0.75rem;font-weight:600">'
+                f'Priority: {item["priority"]:.3f}</span></div>'
+                f'<div style="color:{THEME["text_secondary"]};font-size:0.8rem;margin-top:6px">'
+                f'Risk Score: <b>{item["score"]:.4f}</b> | '
+                f'Uncertainty: <b>{item["uncertainty"]:.4f}</b> | '
+                f'Neighbor Risk: <b>{item["neighbor_risk"]:.4f}</b></div>'
+                f'<div style="color:{THEME["accent_orange"]};font-size:0.75rem;margin-top:4px;font-style:italic">'
+                f'📋 {item["review_reason"]}</div></div>',
+                unsafe_allow_html=True,
+            )
+    else:
+        st.info("No accounts currently in the uncertainty zone. The model is confident about all predictions.")
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # ROUTING VIA TABS
 # ══════════════════════════════════════════════════════════════════════════
@@ -1490,3 +1706,5 @@ with tab_audit:
     page_audit_trail()
 with tab_alerts:
     page_alerts_xai()
+with tab_defense:
+    page_defense_analysis()

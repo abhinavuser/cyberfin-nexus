@@ -26,7 +26,7 @@ ATTACK_SEVERITY = {"phishing": 0.7, "malware": 0.9, "brute_force": 0.5,
                    "credential_stuffing": 0.6, "session_hijack": 0.85}
 
 # ─── GNN / GAT Model ────────────────────────────────────────────────────
-GAT_INPUT_DIM = 8             # node feature dimension
+GAT_INPUT_DIM = 12            # node feature dimension (8 base + 4 temporal)
 GAT_HIDDEN_DIM = 32
 GAT_OUTPUT_DIM = 1
 GAT_HEADS = 4

@@ -206,6 +206,7 @@ def generate_transactions(accounts_df, n_txns=NUM_TRANSACTIONS, seed=42):
         txns.append({
             "txn_id": f"TXN_{i:05d}",
             "timestamp": timestamp,
+            "hour_of_day": timestamp.hour,
             "from_account": from_acc,
             "to_account": to_acc,
             "bank_id": from_bank,

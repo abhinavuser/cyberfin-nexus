@@ -52,42 +52,76 @@ def build_graph(data_dict):
         + ["external"] * len(ext_accounts)
     )
 
-    # ─── Node features (8-dim) ───────────────────────────────────────────
+    # ─── Node features (12-dim) ──────────────────────────────────────────
     features = np.zeros((n_nodes, GAT_INPUT_DIM), dtype=np.float32)
 
     # Account features: [cyber_risk_agg, avg_balance_norm, age_norm, velocity_norm,
-    #                     avg_tx_amt_norm, device_count, is_vpn_freq, n_cyber_events]
+    #                     avg_tx_amt_norm, device_count, is_vpn_freq, n_cyber_events,
+    #                     burst_score, night_ratio, age_velocity_ratio, timing_entropy]
     for _, row in accounts.iterrows():
         idx = node_map[row.account_id]
         acc_events = cyber_events[cyber_events.account_id == row.account_id]
         acc_devs = acc_dev_map[acc_dev_map.account_id == row.account_id]
+        acc_txns = transactions[transactions.from_account == row.account_id]
 
         cyber_risk = acc_events.severity.mean() if len(acc_events) > 0 else 0.0
         vpn_freq = acc_events.is_vpn.mean() if len(acc_events) > 0 else 0.0
         n_events = min(len(acc_events) / 20.0, 1.0)  # normalize
 
+        # ── Temporal features ────────────────────────────────────────
+        # Burst score: fraction of transactions within 2-hour windows of each other
+        burst_score = 0.0
+        if len(acc_txns) > 1 and 'timestamp' in acc_txns.columns:
+            ts = pd.to_datetime(acc_txns['timestamp']).sort_values()
+            diffs = ts.diff().dt.total_seconds().dropna()
+            burst_score = float((diffs < 7200).sum() / max(len(diffs), 1))
+
+        # Night activity: fraction of transactions between 11PM–5AM
+        night_ratio = 0.0
+        if len(acc_txns) > 0 and 'hour_of_day' in acc_txns.columns:
+            night_count = ((acc_txns.hour_of_day >= 23) | (acc_txns.hour_of_day <= 5)).sum()
+            night_ratio = float(night_count / len(acc_txns))
+
+        # Age-velocity suspicion: young account + high velocity = very suspicious
+        age_norm = min(row.account_age_days / 3650, 1.0)
+        vel_norm = min(row.tx_velocity / 15, 1.0)
+        age_vel_ratio = (1.0 - age_norm) * vel_norm  # high when new + fast
+
+        # Timing entropy: low entropy = automated/scripted behaviour
+        timing_entropy = 0.5  # default mid-value
+        if len(acc_txns) > 2 and 'hour_of_day' in acc_txns.columns:
+            hours = acc_txns.hour_of_day.values
+            hist, _ = np.histogram(hours, bins=24, range=(0, 24), density=True)
+            hist = hist[hist > 0]
+            if len(hist) > 0:
+                entropy = -np.sum(hist * np.log2(hist + 1e-10))
+                timing_entropy = min(entropy / np.log2(24), 1.0)
+
         features[idx] = [
             cyber_risk,
             min(row.avg_balance / 50000, 1.0),
-            min(row.account_age_days / 3650, 1.0),
-            min(row.tx_velocity / 15, 1.0),
+            age_norm,
+            vel_norm,
             min(row.avg_tx_amount / 15000, 1.0),
             min(len(acc_devs) / 5.0, 1.0),
             vpn_freq,
             n_events,
+            burst_score,
+            night_ratio,
+            age_vel_ratio,
+            timing_entropy,
         ]
 
-    # Device features: [fingerprint_entropy, is_vpn, is_proxy, usage_count, 0,0,0,0]
+    # Device features: [fingerprint_entropy, is_vpn, is_proxy, usage_count, 0,...,0]
     for _, row in devices.iterrows():
         if row.device_id in node_map:
             idx = node_map[row.device_id]
             usage = len(acc_dev_map[acc_dev_map.device_id == row.device_id])
-            features[idx] = [
+            features[idx, :4] = [
                 row.fingerprint_entropy,
                 float(row.is_vpn),
                 float(row.is_proxy),
                 min(usage / 10.0, 1.0),
-                0, 0, 0, 0,
             ]
 
     # External features: all zeros (unknown)

@@ -53,7 +53,8 @@ def gather_account_context(account_id, graph, scores, data_dict, attention_score
     feature_names = [
         "Cyber Risk Score", "Balance (norm)", "Account Age (norm)",
         "Tx Velocity (norm)", "Avg Tx Amount (norm)", "Device Count (norm)",
-        "VPN Usage Freq", "Cyber Event Count (norm)"
+        "VPN Usage Freq", "Cyber Event Count (norm)",
+        "Burst Score", "Night Activity Ratio", "Age-Velocity Suspicion", "Timing Entropy"
     ]
     feature_dict = {name: round(float(val), 3) for name, val in zip(feature_names, features)}
 
