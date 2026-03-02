@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# PyTorch model checkpoints & training artifacts
+*.pt
+*.pth
+training_log.json
+
+# Large datasets
+Base.csv
+Data_Gen/output/
+FL/bank_*.csv
+FL/preprocessed.csv
+GNN/preprocessed.csv
+
+# Log/output files from scripts
+*_output.txt
+Data_Gen/prep_output.txt
+Data_Gen/train_output.txt
+Data_Gen/generate_output.txt
+Data_Gen/model_output.txt
+Data_Gen/validate_output.txt
+FL/split_output.txt
+FL/graph_output.txt
+
+# Transforms (can be regenerated)
+Data_Gen/transforms.json
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+.DS_Store
+
+# Streamlit
+.streamlit/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Resolved files
+*.resolved
