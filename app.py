@@ -43,7 +43,7 @@ st.set_page_config(
     page_title="CyberFin Nexus",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -64,7 +64,7 @@ st.markdown(f"""
 
     /* ═══════════ ANIMATED BACKGROUND ═══════════ */
     .stApp {{
-        background: linear-gradient(135deg, #0a0a1a 0%, #0d1117 30%, #0a0e1a 60%, #0d0a1a 100%);
+        background: #000000;
         color: #e2e8f0;
     }}
     .stApp::before {{
@@ -72,9 +72,9 @@ st.markdown(f"""
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
         background:
-            radial-gradient(ellipse 80% 50% at 20% 40%, rgba(0, 240, 255, 0.03) 0%, transparent 70%),
-            radial-gradient(ellipse 60% 40% at 80% 20%, rgba(139, 92, 246, 0.03) 0%, transparent 70%),
-            radial-gradient(ellipse 50% 60% at 50% 80%, rgba(236, 72, 153, 0.02) 0%, transparent 70%);
+            radial-gradient(ellipse 80% 50% at 20% 40%, rgba(0, 240, 255, 0.025) 0%, transparent 70%),
+            radial-gradient(ellipse 60% 40% at 80% 20%, rgba(139, 92, 246, 0.02) 0%, transparent 70%),
+            radial-gradient(ellipse 50% 60% at 50% 80%, rgba(236, 72, 153, 0.015) 0%, transparent 70%);
         pointer-events: none;
         z-index: 0;
         animation: bgShift 20s ease-in-out infinite alternate;
@@ -118,13 +118,52 @@ st.markdown(f"""
 
     /* ═══════════ SIDEBAR ═══════════ */
     section[data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #0d1117 0%, #0a0e1a 50%, #0d0a1a 100%) !important;
-        border-right: 1px solid rgba(0, 240, 255, 0.1);
+        background: #000000 !important;
+        border-right: 1px solid rgba(0, 240, 255, 0.08);
     }}
-    section[data-testid="stSidebar"] .stRadio > label {{
-        color: #94a3b8 !important;
+
+    /* ═══════════ TOP NAVBAR TABS ═══════════ */
+    .stTabs [data-baseweb="tab-list"] {{
+        background: linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.8));
+        border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+        padding: 0 20px;
+        gap: 0;
+        border-radius: 0;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        background: transparent !important;
+        border: none !important;
+        color: #64748b !important;
         font-weight: 600 !important;
-        letter-spacing: 0.5px;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.5px !important;
+        padding: 16px 24px !important;
+        border-radius: 0 !important;
+        transition: all 0.3s ease !important;
+        position: relative;
+        white-space: nowrap;
+    }}
+    .stTabs [data-baseweb="tab"]:hover {{
+        color: {THEME['accent_cyan']} !important;
+        background: rgba(0, 240, 255, 0.05) !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: {THEME['accent_cyan']} !important;
+        background: rgba(0, 240, 255, 0.08) !important;
+        border-bottom: 2px solid {THEME['accent_cyan']} !important;
+        box-shadow: 0 2px 15px rgba(0, 240, 255, 0.15);
+    }}
+    .stTabs [data-baseweb="tab-highlight"] {{
+        background: linear-gradient(90deg, {THEME['accent_cyan']}, {THEME['accent_purple']}) !important;
+        height: 2px !important;
+    }}
+    .stTabs [data-baseweb="tab-border"] {{
+        display: none !important;
+    }}
+    .stTabs [data-baseweb="tab-panel"] {{
+        padding-top: 20px !important;
     }}
 
     /* ═══════════ METRIC CARDS ═══════════ */
@@ -425,41 +464,35 @@ def build_blockchain_trail():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# SIDEBAR
+# HEADER BANNER + TOP NAVBAR
 # ══════════════════════════════════════════════════════════════════════════
 
-with st.sidebar:
-    st.markdown('<div class="glow-header">🛡️ CyberFin Nexus</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Cyber × Financial Threat Intelligence</div>', unsafe_allow_html=True)
+import base64
 
-    st.divider()
-
-    page = st.radio(
-        "**Navigation**",
-        ["🏠 Overview", "🕸️ Nexus Graph", "🏦 Federated Learning",
-         "⚔️ Attack Simulation", "🔗 Audit Trail", "🚨 Alerts & XAI"],
-        index=0,
-    )
-
-    st.divider()
-
-    st.markdown("### ⚡ Quick Stats")
-    data_dict = load_data()
-    accounts = data_dict["accounts"]
-    n_mules = accounts.is_mule.sum()
-    n_total = len(accounts)
-    st.markdown(f"**Accounts:** {n_total}")
-    st.markdown(f"**Mule Accounts:** {n_mules} ({n_mules/n_total*100:.1f}%)")
-    st.markdown(f"**Banks:** {accounts.bank_id.nunique()}")
-    st.markdown(f"**Transactions:** {len(data_dict['transactions'])}")
-    st.markdown(f"**Cyber Events:** {len(data_dict['cyber_events'])}")
-
-    st.divider()
+# Encode header image for inline CSS
+header_img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cyber_header_bg.png")
+if os.path.exists(header_img_path):
+    with open(header_img_path, "rb") as f:
+        header_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
-        f"<div style='color:{THEME['text_secondary']};font-size:0.75rem;text-align:center;'>"
-        f"Built with PyTorch Geometric + Streamlit<br>CyberFin Nexus v1.0</div>",
+        f'<div style="width:100%;height:120px;background:url(data:image/png;base64,{header_b64}) center/cover;'
+        f'display:flex;align-items:center;justify-content:center;'
+        f'border-bottom:1px solid rgba(0,240,255,0.15);margin-bottom:0">'
+        f'<div style="text-align:center">'
+        f'<div class="glow-header" style="font-size:2.2rem;margin:0">🛡️ CyberFin Nexus</div>'
+        f'<div class="sub-header" style="margin:0;font-size:0.8rem">Privacy-First Cyber-Financial Fusion for Mule Ring Detection</div>'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
+else:
+    st.markdown('<div class="glow-header">🛡️ CyberFin Nexus</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Privacy-First Cyber-Financial Fusion for Mule Ring Detection</div>', unsafe_allow_html=True)
+
+# Create top tab navigation
+tab_overview, tab_graph, tab_fl, tab_attack, tab_audit, tab_alerts = st.tabs([
+    "🏠 OVERVIEW", "🕸️ NEXUS GRAPH", "🏦 FEDERATED LEARNING",
+    "⚔️ ATTACK SIMULATION", "🔗 AUDIT TRAIL", "🚨 ALERTS & XAI"
+])
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -467,19 +500,13 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════
 
 def page_overview():
-    st.markdown('<div class="glow-header">🛡️ CyberFin Nexus</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="sub-header">'
-        'Privacy-First Cyber-Financial Fusion for Mule Ring Detection'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
     model, graph, history, scores = load_model_and_graph()
+    data_dict = load_data()
     account_mask = graph.account_mask.numpy()
     y_true = graph.y[graph.account_mask].numpy()
     y_scores = scores[account_mask]
     metrics = compute_all_metrics(y_true, y_scores)
+    n_mules = int(data_dict["accounts"].is_mule.sum())
 
     # Key Metrics Row
     cols = st.columns(5)
@@ -1399,18 +1426,18 @@ def page_alerts_xai():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ROUTING
+# ROUTING VIA TABS
 # ══════════════════════════════════════════════════════════════════════════
 
-if page == "🏠 Overview":
+with tab_overview:
     page_overview()
-elif page == "🕸️ Nexus Graph":
+with tab_graph:
     page_nexus_graph()
-elif page == "🏦 Federated Learning":
+with tab_fl:
     page_federated_learning()
-elif page == "⚔️ Attack Simulation":
+with tab_attack:
     page_attack_simulation()
-elif page == "🔗 Audit Trail":
+with tab_audit:
     page_audit_trail()
-elif page == "🚨 Alerts & XAI":
+with tab_alerts:
     page_alerts_xai()
