@@ -60,7 +60,9 @@ st.markdown(f"""
     /* ═══════════ GLOBAL RESET & FONTS ═══════════ */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
 
-    *, *::before, *::after {{ font-family: 'Inter', -apple-system, sans-serif !important; }}
+    html, body, [class*="css"] {{ font-family: 'Inter', -apple-system, sans-serif !important; }}
+    /* Exclude Streamlit Material Icons from being overridden */
+    span[class*="st-emotion-cache-pd6qx2"], i[class*="st-emotion"], span[class*="ejhh0er0"], i[class*="material-icons"] {{ font-family: 'Material Symbols Rounded', sans-serif !important; }}
     code, pre, .stCode {{ font-family: 'JetBrains Mono', monospace !important; }}
 
     /* ═══════════ ANIMATED BACKGROUND ═══════════ */

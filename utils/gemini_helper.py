@@ -11,6 +11,7 @@ import time
 
 # Available Gemini models (ordered by preference)
 AVAILABLE_MODELS = [
+    "gemma-3-1b-it",
     "gemini-3-flash-preview",
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
