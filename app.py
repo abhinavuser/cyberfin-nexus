@@ -50,111 +50,332 @@ st.set_page_config(
 # CUSTOM CSS
 # ══════════════════════════════════════════════════════════════════════════
 
+st.markdown("""
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+""", unsafe_allow_html=True)
+
 st.markdown(f"""
 <style>
-    /* Dark theme overrides */
+    /* ═══════════ GLOBAL RESET & FONTS ═══════════ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    *, *::before, *::after {{ font-family: 'Inter', -apple-system, sans-serif !important; }}
+    code, pre, .stCode {{ font-family: 'JetBrains Mono', monospace !important; }}
+
+    /* ═══════════ ANIMATED BACKGROUND ═══════════ */
     .stApp {{
-        background: linear-gradient(135deg, {THEME['bg_primary']} 0%, {THEME['bg_secondary']} 100%);
-        color: {THEME['text_primary']};
+        background: linear-gradient(135deg, #0a0a1a 0%, #0d1117 30%, #0a0e1a 60%, #0d0a1a 100%);
+        color: #e2e8f0;
+    }}
+    .stApp::before {{
+        content: '';
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background:
+            radial-gradient(ellipse 80% 50% at 20% 40%, rgba(0, 240, 255, 0.03) 0%, transparent 70%),
+            radial-gradient(ellipse 60% 40% at 80% 20%, rgba(139, 92, 246, 0.03) 0%, transparent 70%),
+            radial-gradient(ellipse 50% 60% at 50% 80%, rgba(236, 72, 153, 0.02) 0%, transparent 70%);
+        pointer-events: none;
+        z-index: 0;
+        animation: bgShift 20s ease-in-out infinite alternate;
     }}
 
-    /* Sidebar styling */
+    @keyframes bgShift {{
+        0%   {{ opacity: 0.6; transform: scale(1); }}
+        50%  {{ opacity: 1;   transform: scale(1.05); }}
+        100% {{ opacity: 0.7; transform: scale(1); }}
+    }}
+
+    /* ═══════════ KEYFRAME ANIMATIONS ═══════════ */
+    @keyframes fadeInUp {{
+        from {{ opacity: 0; transform: translateY(20px); }}
+        to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    @keyframes glowPulse {{
+        0%, 100% {{ box-shadow: 0 0 15px rgba(0, 240, 255, 0.1), 0 0 30px rgba(0, 240, 255, 0.05); }}
+        50%      {{ box-shadow: 0 0 25px rgba(0, 240, 255, 0.2), 0 0 50px rgba(0, 240, 255, 0.1); }}
+    }}
+    @keyframes shimmer {{
+        0%   {{ background-position: -200% center; }}
+        100% {{ background-position: 200% center; }}
+    }}
+    @keyframes borderGlow {{
+        0%, 100% {{ border-color: rgba(0, 240, 255, 0.3); }}
+        50%      {{ border-color: rgba(139, 92, 246, 0.5); }}
+    }}
+    @keyframes floatUp {{
+        0%, 100% {{ transform: translateY(0); }}
+        50%      {{ transform: translateY(-6px); }}
+    }}
+
+    /* ═══════════ CUSTOM SCROLLBAR ═══════════ */
+    ::-webkit-scrollbar {{ width: 6px; }}
+    ::-webkit-scrollbar-track {{ background: #0a0a1a; }}
+    ::-webkit-scrollbar-thumb {{
+        background: linear-gradient(180deg, {THEME['accent_cyan']}, {THEME['accent_purple']});
+        border-radius: 3px;
+    }}
+
+    /* ═══════════ SIDEBAR ═══════════ */
     section[data-testid="stSidebar"] {{
-        background: {THEME['bg_secondary']};
-        border-right: 1px solid {THEME['accent_cyan']}33;
+        background: linear-gradient(180deg, #0d1117 0%, #0a0e1a 50%, #0d0a1a 100%) !important;
+        border-right: 1px solid rgba(0, 240, 255, 0.1);
+    }}
+    section[data-testid="stSidebar"] .stRadio > label {{
+        color: #94a3b8 !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.5px;
     }}
 
-    /* Metric cards */
+    /* ═══════════ METRIC CARDS ═══════════ */
     .metric-card {{
-        background: linear-gradient(135deg, {THEME['bg_card']}ee, {THEME['bg_secondary']}dd);
-        border: 1px solid {THEME['accent_cyan']}40;
-        border-radius: 12px;
-        padding: 20px;
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.6));
+        border: 1px solid rgba(0, 240, 255, 0.15);
+        border-radius: 16px;
+        padding: 24px 20px;
         text-align: center;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 4px 20px rgba(0, 240, 255, 0.08);
-        transition: transform 0.2s, box-shadow 0.2s;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.4),
+            0 0 30px rgba(0, 240, 255, 0.04),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        animation: fadeInUp 0.6s ease-out both;
+        position: relative;
+        overflow: hidden;
+    }}
+    .metric-card::before {{
+        content: '';
+        position: absolute;
+        top: 0; left: -100%; width: 200%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.03), transparent);
+        transition: left 0.6s;
     }}
     .metric-card:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(0, 240, 255, 0.15);
+        transform: translateY(-6px) scale(1.02);
+        border-color: rgba(0, 240, 255, 0.4);
+        box-shadow:
+            0 12px 40px rgba(0, 0, 0, 0.5),
+            0 0 40px rgba(0, 240, 255, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }}
+    .metric-card:hover::before {{ left: 100%; }}
+
     .metric-value {{
-        font-size: 2.2rem;
+        font-family: 'Orbitron', sans-serif !important;
+        font-size: 2.4rem;
         font-weight: 700;
-        background: linear-gradient(90deg, {THEME['accent_cyan']}, {THEME['accent_purple']});
+        background: linear-gradient(135deg, {THEME['accent_cyan']}, #818cf8, {THEME['accent_purple']});
+        background-size: 200% 200%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin: 8px 0;
-    }}
-    .metric-label {{
-        color: {THEME['text_secondary']};
-        font-size: 0.85rem;
-        text-transform: uppercase;
+        animation: shimmer 4s ease-in-out infinite;
+        margin: 10px 0;
         letter-spacing: 1px;
     }}
-
-    /* Section headers */
-    .section-header {{
-        background: linear-gradient(90deg, {THEME['accent_cyan']}15, transparent);
-        border-left: 3px solid {THEME['accent_cyan']};
-        padding: 10px 15px;
-        margin: 20px 0 15px 0;
-        border-radius: 0 8px 8px 0;
+    .metric-label {{
+        color: #64748b;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-weight: 600;
     }}
 
-    /* Alert cards */
+    /* ═══════════ SECTION HEADERS ═══════════ */
+    .section-header {{
+        background: linear-gradient(90deg, rgba(0, 240, 255, 0.08), rgba(139, 92, 246, 0.03), transparent);
+        border-left: 3px solid;
+        border-image: linear-gradient(180deg, {THEME['accent_cyan']}, {THEME['accent_purple']}) 1;
+        padding: 12px 20px;
+        margin: 28px 0 18px 0;
+        border-radius: 0 12px 12px 0;
+        animation: fadeInUp 0.5s ease-out both;
+    }}
+    .section-header h3 {{
+        margin: 0 !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px;
+    }}
+
+    /* ═══════════ ALERT CARDS ═══════════ */
     .alert-critical {{
-        background: linear-gradient(135deg, #ff006e15, #ff000010);
-        border: 1px solid {THEME['risk_critical']}60;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 8px 0;
+        background: linear-gradient(135deg, rgba(255, 0, 110, 0.08), rgba(255, 0, 0, 0.03));
+        border: 1px solid rgba(255, 0, 110, 0.3);
+        border-left: 4px solid {THEME['risk_critical']};
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin: 10px 0;
+        transition: all 0.3s ease;
+        animation: fadeInUp 0.5s ease-out both;
+        backdrop-filter: blur(10px);
+    }}
+    .alert-critical:hover {{
+        border-color: rgba(255, 0, 110, 0.6);
+        box-shadow: 0 0 25px rgba(255, 0, 110, 0.1);
+        transform: translateX(4px);
     }}
     .alert-high {{
-        background: linear-gradient(135deg, #ff8c0015, #ff006e10);
-        border: 1px solid {THEME['risk_high']}60;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 8px 0;
+        background: linear-gradient(135deg, rgba(255, 140, 0, 0.08), rgba(255, 0, 110, 0.03));
+        border: 1px solid rgba(255, 140, 0, 0.3);
+        border-left: 4px solid {THEME['risk_high']};
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin: 10px 0;
+        transition: all 0.3s ease;
+        animation: fadeInUp 0.5s ease-out both;
+        backdrop-filter: blur(10px);
+    }}
+    .alert-high:hover {{
+        border-color: rgba(255, 140, 0, 0.6);
+        box-shadow: 0 0 25px rgba(255, 140, 0, 0.1);
+        transform: translateX(4px);
     }}
 
-    /* Glowing header */
+    /* ═══════════ GLOW HEADER ═══════════ */
     .glow-header {{
         text-align: center;
-        font-size: 2.5rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, {THEME['accent_cyan']}, {THEME['accent_purple']}, {THEME['accent_pink']});
+        font-family: 'Orbitron', sans-serif !important;
+        font-size: 2.8rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, {THEME['accent_cyan']}, #818cf8, {THEME['accent_purple']}, {THEME['accent_pink']});
+        background-size: 300% 300%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-shadow: 0 0 30px {THEME['accent_cyan']}40;
+        animation: shimmer 6s ease-in-out infinite;
         margin-bottom: 5px;
+        filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.3));
     }}
     .sub-header {{
         text-align: center;
-        color: {THEME['text_secondary']};
-        font-size: 1rem;
-        margin-bottom: 30px;
+        color: #64748b;
+        font-size: 0.95rem;
+        margin-bottom: 35px;
+        letter-spacing: 1px;
+        font-weight: 400;
     }}
 
-    /* Table styling */
+    /* ═══════════ TABLES ═══════════ */
     .dataframe {{
-        background: {THEME['bg_card']} !important;
+        background: rgba(15, 23, 42, 0.8) !important;
+        border-radius: 12px !important;
+    }}
+    [data-testid="stDataFrame"] {{
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(0, 240, 255, 0.1);
     }}
 
-    /* Status badge */
+    /* ═══════════ STATUS BADGES ═══════════ */
     .status-badge {{
         display: inline-block;
-        padding: 4px 12px;
+        padding: 5px 14px;
         border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.5px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
     }}
-    .badge-critical {{ background: {THEME['risk_critical']}30; color: {THEME['risk_critical']}; border: 1px solid {THEME['risk_critical']}50; }}
-    .badge-high {{ background: {THEME['risk_high']}30; color: {THEME['risk_high']}; border: 1px solid {THEME['risk_high']}50; }}
-    .badge-medium {{ background: {THEME['risk_medium']}30; color: {THEME['risk_medium']}; border: 1px solid {THEME['risk_medium']}50; }}
-    .badge-low {{ background: {THEME['risk_low']}30; color: {THEME['risk_low']}; border: 1px solid {THEME['risk_low']}50; }}
+    .badge-critical {{
+        background: rgba(255, 0, 110, 0.15);
+        color: {THEME['risk_critical']};
+        border: 1px solid rgba(255, 0, 110, 0.4);
+        box-shadow: 0 0 10px rgba(255, 0, 110, 0.1);
+    }}
+    .badge-high {{
+        background: rgba(255, 140, 0, 0.15);
+        color: {THEME['risk_high']};
+        border: 1px solid rgba(255, 140, 0, 0.4);
+        box-shadow: 0 0 10px rgba(255, 140, 0, 0.1);
+    }}
+    .badge-medium {{
+        background: rgba(255, 200, 0, 0.12);
+        color: {THEME['risk_medium']};
+        border: 1px solid rgba(255, 200, 0, 0.35);
+        box-shadow: 0 0 10px rgba(255, 200, 0, 0.08);
+    }}
+    .badge-low {{
+        background: rgba(0, 255, 136, 0.12);
+        color: {THEME['risk_low']};
+        border: 1px solid rgba(0, 255, 136, 0.35);
+        box-shadow: 0 0 10px rgba(0, 255, 136, 0.08);
+    }}
+
+    /* ═══════════ BLOCK CHAIN BLOCK CARD ═══════════ */
+    .chain-block {{
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.5));
+        border-left: 3px solid;
+        padding: 12px 16px;
+        margin: 6px 0;
+        border-radius: 0 10px 10px 0;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(8px);
+    }}
+    .chain-block:hover {{
+        transform: translateX(6px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }}
+
+    /* ═══════════ FL STEP CARDS ═══════════ */
+    .fl-step {{
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.5));
+        border: 1px solid rgba(0, 240, 255, 0.1);
+        border-radius: 16px;
+        padding: 24px 18px;
+        min-height: 140px;
+        text-align: center;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(15px);
+        animation: fadeInUp 0.6s ease-out both;
+    }}
+    .fl-step:hover {{
+        transform: translateY(-8px);
+        border-color: rgba(0, 240, 255, 0.35);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4), 0 0 25px rgba(0, 240, 255, 0.08);
+    }}
+
+    /* ═══════════ BUTTONS ═══════════ */
+    .stButton > button {{
+        background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(139, 92, 246, 0.15)) !important;
+        border: 1px solid rgba(0, 240, 255, 0.3) !important;
+        color: {THEME['accent_cyan']} !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.5px !important;
+        transition: all 0.3s ease !important;
+        padding: 10px 24px !important;
+    }}
+    .stButton > button:hover {{
+        background: linear-gradient(135deg, rgba(0, 240, 255, 0.25), rgba(139, 92, 246, 0.25)) !important;
+        border-color: rgba(0, 240, 255, 0.6) !important;
+        box-shadow: 0 0 25px rgba(0, 240, 255, 0.15) !important;
+        transform: translateY(-2px);
+    }}
+    .stButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, {THEME['accent_cyan']}, {THEME['accent_purple']}) !important;
+        color: white !important;
+        border: none !important;
+    }}
+    .stButton > button[kind="primary"]:hover {{
+        box-shadow: 0 0 30px rgba(0, 240, 255, 0.3) !important;
+    }}
+
+    /* ═══════════ DIVIDERS ═══════════ */
+    hr {{
+        border: none !important;
+        height: 1px !important;
+        background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.2), rgba(139, 92, 246, 0.2), transparent) !important;
+    }}
+
+    /* ═══════════ SELECTBOX / SLIDER ═══════════ */
+    .stSelectbox > div > div, .stSlider > div {{
+        border-radius: 10px !important;
+    }}
+
+    /* ═══════════ HIDE STREAMLIT BOILERPLATE ═══════════ */
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
+    header[data-testid="stHeader"] {{ background: transparent !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -697,9 +918,11 @@ def page_federated_learning():
     for col, (title, desc) in zip(fl_cols, steps):
         with col:
             st.markdown(
-                f'<div class="metric-card" style="min-height:120px">'
-                f'<div style="font-size:1.1rem;font-weight:600;margin-bottom:8px">{title}</div>'
-                f'<div style="color:{THEME["text_secondary"]};font-size:0.85rem">{desc}</div>'
+                f'<div class="fl-step">'
+                f'<div style="font-size:1.2rem;font-weight:700;margin-bottom:10px;'
+                f'background:linear-gradient(135deg,{THEME["accent_cyan"]},{THEME["accent_purple"]});'
+                f'-webkit-background-clip:text;-webkit-text-fill-color:transparent">{title}</div>'
+                f'<div style="color:#94a3b8;font-size:0.85rem;line-height:1.5">{desc}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -961,11 +1184,10 @@ def page_audit_trail():
             }.get(block_type, THEME["text_secondary"])
 
             st.markdown(
-                f'<div style="background:{THEME["bg_card"]};border-left:3px solid {color};'
-                f'padding:8px 12px;margin:4px 0;border-radius:0 6px 6px 0;font-size:0.85rem">'
+                f'<div class="chain-block" style="border-color:{color}">'
                 f'<b style="color:{color}">#{block["index"]} {block_type}</b> '
-                f'<span style="color:{THEME["text_secondary"]}">| {block["timestamp"][:19]}</span><br>'
-                f'<code style="font-size:0.7rem;color:{THEME["text_secondary"]}">{block["hash"][:32]}...</code>'
+                f'<span style="color:#64748b">| {block["timestamp"][:19]}</span><br>'
+                f'<code style="font-size:0.7rem;color:#475569;font-family:JetBrains Mono,monospace">{block["hash"][:32]}...</code>'
                 f'</div>',
                 unsafe_allow_html=True,
             )

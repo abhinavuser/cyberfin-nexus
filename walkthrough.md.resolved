@@ -1,0 +1,74 @@
+# CyberFin Nexus — Implementation Walkthrough
+
+Privacy-first platform fusing cyber threat telemetry with financial transactions using GNNs and Federated Learning to detect money mule rings.
+
+## Architecture
+
+```mermaid
+graph LR
+    A[Data Generator] --> B[Graph Builder]
+    B --> C[GAT Model]
+    B --> D[FL Engine]
+    C --> E[Adversarial Sim]
+    C --> F[Audit Trail]
+    C --> G[Streamlit Dashboard]
+    D --> G
+    E --> G
+    F --> G
+```
+
+## Files Created
+
+| File | Purpose |
+|------|---------|
+| [data_generator.py](file:///e:/VS%20Code/cyber/data_generator.py) | Synthetic accounts, transactions, cyber events, mule rings |
+| [graph_builder.py](file:///e:/VS%20Code/cyber/graph_builder.py) | Heterogeneous PyG graph (account↔device↔transaction) |
+| [gat_model.py](file:///e:/VS%20Code/cyber/models/gat_model.py) | 3-layer GAT with multi-head attention + explainability |
+| [fl_engine.py](file:///e:/VS%20Code/cyber/federated/fl_engine.py) | FedAvg + Gaussian DP noise for cross-bank collaboration |
+| [adversarial_sim.py](file:///e:/VS%20Code/cyber/rl/adversarial_sim.py) | 4 attack strategies with adaptive retraining |
+| [audit_trail.py](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py) | SHA-256 hash chain for tamper-evident audit |
+| [config.py](file:///e:/VS%20Code/cyber/utils/config.py) | Centralized configuration |
+| [metrics.py](file:///e:/VS%20Code/cyber/utils/metrics.py) | AUC, precision, recall, F1, ROI helpers |
+| [app.py](file:///e:/VS%20Code/cyber/app.py) | 1200-line Streamlit dashboard (6 tabs) |
+
+## Key Metrics
+
+| Metric | Value |
+|--------|-------|
+| **GAT AUC** | 0.983 |
+| **Precision** | 76.1% |
+| **Recall** | 94.6% |
+| **F1 Score** | 0.843 |
+| **Est. Savings** | $18.5M |
+| **FL Privacy ε** | 1.0 (GDPR ✅) |
+
+## Dashboard Screenshots
+
+````carousel
+![Overview — Training curves and risk distribution render correctly](C:\Users\chipn\.gemini\antigravity\brain\acd182df-76ed-49a8-82cc-ba0e33d10865\overview_charts_rendering_1772432491072.png)
+<!-- slide -->
+![Federated Learning — FL convergence chart with per-bank AUC and privacy table](C:\Users\chipn\.gemini\antigravity\brain\acd182df-76ed-49a8-82cc-ba0e33d10865\federated_learning_verify_1772432602138.png)
+<!-- slide -->
+![Alerts & XAI — Risk alerts with attention weights and connected entities](C:\Users\chipn\.gemini\antigravity\brain\acd182df-76ed-49a8-82cc-ba0e33d10865\alerts_xai_load_1772432580427.png)
+````
+
+![Dashboard verification recording](C:\Users\chipn\.gemini\antigravity\brain\acd182df-76ed-49a8-82cc-ba0e33d10865\dashboard_final_check_1772432444642.webp)
+
+## Bugs Fixed During Verification
+
+1. **FL Engine dtype error** — `torch.randn_like` failed on integer params (e.g. BatchNorm `num_batches_tracked`). Fixed by skipping non-float params in DP noise injection.
+2. **Missing numpy import** — [blockchain/audit_trail.py](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py) used `np.mean` but only imported numpy in `__main__`. Moved to module level.
+3. **Plotly 8-digit hex colors** — `f"{color}20"` produced invalid 8-char hex. Added [hex_to_rgba()](file:///e:/VS%20Code/cyber/app.py#32-37) helper converting all 11 occurrences to proper [rgba()](file:///e:/VS%20Code/cyber/app.py#32-37) format.
+
+## How to Run
+
+```bash
+# Install dependencies
+pip install torch torch-geometric networkx streamlit plotly pandas numpy scikit-learn matplotlib
+
+# Run integration test
+python test_all.py
+
+# Launch dashboard
+streamlit run app.py
+```

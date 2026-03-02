@@ -1,0 +1,137 @@
+# CyberFin Nexus — Full Implementation Plan
+
+A hackathon-winning, privacy-first platform fusing cyber threat telemetry with financial transactions using GNNs (GAT), Federated Learning, and RL-based attacker adaptation. Includes an interactive Streamlit dashboard with explainable AI, blockchain-like audit trails, and cross-bank collaboration simulation.
+
+## Proposed Changes
+
+### Project Structure & Dependencies
+
+#### [NEW] [requirements.txt](file:///e:/VS%20Code/cyber/requirements.txt)
+- All pip dependencies: `torch`, `torch-geometric`, `networkx`, `streamlit`, `plotly`, `pandas`, `numpy`, `scikit-learn`, `matplotlib`
+
+---
+
+### Data Generation Module
+
+#### [NEW] [data_generator.py](file:///e:/VS%20Code/cyber/data_generator.py)
+- **Realistic synthetic data** for 4 banks, 200+ accounts, 50+ devices, 500+ transactions
+- Generates cyber logs (phishing, malware, brute-force attacks with IPs, timestamps, severity)
+- Generates financial transactions with amounts, timestamps, currencies
+- Creates mule ring structures (coordinated clusters of 3-8 accounts)
+- Labels: ground-truth mule vs. legitimate accounts
+- Outputs DataFrames for downstream consumption
+
+---
+
+### Graph Construction Module
+
+#### [NEW] [graph_builder.py](file:///e:/VS%20Code/cyber/graph_builder.py)
+- Fuses cyber logs + transactions into a **heterogeneous graph**
+- Node types: accounts, devices, external endpoints
+- Edge types: `account↔device` (cyber), `account→account` (transaction), `account→external` (withdrawal)
+- Node features: cyber risk score, transaction volume, velocity, device entropy, behavioral features
+- Converts to PyTorch Geometric `Data` object with proper `edge_index`, `x`, and `y` tensors
+
+---
+
+### GNN Model (GAT with Attention)
+
+#### [NEW] [models/gat_model.py](file:///e:/VS%20Code/cyber/models/gat_model.py)
+- 3-layer GAT with multi-head attention (8 heads → 8 heads → 1 head)
+- Dropout + batch normalization for regularization
+- `explain()` method returning attention weights per edge (for explainability)
+- Outputs per-node risk scores (sigmoid)
+
+---
+
+### Federated Learning Simulation
+
+#### [NEW] [federated/fl_engine.py](file:///e:/VS%20Code/cyber/federated/fl_engine.py)
+- Partitions data by bank ID → creates local datasets
+- Trains local GAT models independently per bank
+- **FedAvg** aggregation: averages model weights across banks
+- Differential Privacy: adds calibrated Gaussian noise (ε=1.0) to gradients
+- Tracks per-round accuracy/AUC for convergence visualization
+
+---
+
+### RL-Based Attacker Adaptation
+
+#### [NEW] [rl/adversarial_sim.py](file:///e:/VS%20Code/cyber/rl/adversarial_sim.py)
+- Simulates attacker evolution strategies:
+  - **Velocity reduction**: Mules slow transactions to evade velocity checks
+  - **Amount splitting**: Large amounts broken into sub-threshold transfers (structuring/smurfing)
+  - **Device rotation**: Attackers switch devices to break fingerprint links
+  - **Behavioral mimicry**: AI-generated normal patterns
+- After each attack mutation, retrains GAT incrementally (online learning)
+- Reports detection rate before/after adaptation
+
+---
+
+### Blockchain Traceability
+
+#### [NEW] [blockchain/audit_trail.py](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py)
+- Mock hash-chain: each transaction gets SHA-256 hash linking to previous
+- Immutable audit log with timestamps, risk scores, model decisions
+- Tamper detection: verify chain integrity
+- Export audit trail as JSON for regulatory compliance
+
+---
+
+### Streamlit Dashboard
+
+#### [NEW] [app.py](file:///e:/VS%20Code/cyber/app.py)
+- **Main entry point** — multi-page Streamlit app with sidebar navigation
+- 6 interactive tabs:
+
+| Tab | Contents |
+|-----|----------|
+| **🏠 Overview** | Problem statement, architecture diagram, key metrics cards |
+| **🕸️ Nexus Graph** | Interactive Plotly network graph with risk-colored nodes, hover tooltips, edge attention weights |
+| **🏦 Federated Learning** | Per-bank training metrics, FL convergence chart, privacy budget (ε) slider |
+| **⚔️ Attack Simulation** | "Simulate Attack" button → shows before/after detection, RL adaptation metrics |
+| **🔗 Audit Trail** | Blockchain hash-chain viewer, tamper verification, transaction timeline |
+| **🚨 Alerts & Explainability** | Top-N flagged accounts, GAT attention heatmap, confidence scores, human-override toggle |
+
+---
+
+### Utility & Config
+
+#### [NEW] [utils/config.py](file:///e:/VS%20Code/cyber/utils/config.py)
+- All hyperparameters, paths, color schemes, and constants in one place
+
+#### [NEW] [utils/metrics.py](file:///e:/VS%20Code/cyber/utils/metrics.py)
+- AUC, precision, recall, F1, confusion matrix helpers
+
+---
+
+## Add-Ons for Hackathon Edge
+
+1. **Temporal Risk Decay**: Risk scores decay over time if no new signals — prevents stale alerts
+2. **Multi-Modal Fusion Score**: Combine GNN output + behavioral RNN sequence score + device fingerprint score
+3. **ROI Calculator**: Interactive widget showing estimated savings ($2M+ per ring detected)
+4. **Live Attack Simulation Button**: One-click demo of full attack→detect→adapt cycle
+5. **Exportable Report**: Generate PDF summary of detected rings for judge handout
+
+---
+
+## Verification Plan
+
+### Automated Verification
+1. **Data generation test** — Run `python data_generator.py` and verify output DataFrames have expected shapes and distributions
+2. **Graph construction test** — Run `python graph_builder.py` and verify PyG Data object is valid (correct tensor shapes, edge_index validity)
+3. **Model training test** — Train GAT for 50 epochs, verify AUC > 0.80 on synthetic data:
+   ```
+   python -c "from models.gat_model import *; from graph_builder import *; from data_generator import *; print('Model builds OK')"
+   ```
+4. **FL convergence test** — Verify global model AUC after FedAvg ≥ 85% of centralized AUC
+5. **RL adaptation test** — Verify detection rate stays > 80% after adversarial perturbation
+
+### Manual Verification (Browser)
+1. Launch dashboard: `streamlit run app.py`
+2. Navigate each tab and verify interactive elements work
+3. Click "Simulate Attack" and verify the graph updates with attack results
+4. Verify blockchain audit trail shows hash chain
+5. Verify alerts show explainable attention weights
+
+All tests will be run via terminal commands and verified with browser subagent for the dashboard.
