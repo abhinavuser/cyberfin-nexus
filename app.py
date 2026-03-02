@@ -27,6 +27,7 @@ from rl.adversarial_sim import AdversarialSimulator
 from blockchain.audit_trail import AuditChain, build_audit_trail
 from utils.config import THEME, RISK_THRESHOLDS, ROI_AVG_MULE_RING_LOSS
 from utils.metrics import compute_all_metrics, risk_category, compute_roi
+from utils.gemini_helper import gather_account_context, generate_suspicion_summary, AVAILABLE_MODELS
 
 
 def hex_to_rgba(hex_color, opacity):
@@ -487,6 +488,34 @@ if os.path.exists(header_img_path):
 else:
     st.markdown('<div class="glow-header">🛡️ CyberFin Nexus</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Privacy-First Cyber-Financial Fusion for Mule Ring Detection</div>', unsafe_allow_html=True)
+
+# ── Sidebar: Gemini API Key ──────────────────────────────────────────────
+with st.sidebar:
+    st.markdown(
+        f'<div style="padding:12px;background:rgba(0,240,255,0.05);border:1px solid rgba(0,240,255,0.15);'
+        f'border-radius:12px;margin-bottom:16px">'
+        f'<div style="color:{THEME["accent_cyan"]};font-weight:700;font-size:0.9rem;margin-bottom:8px">'
+        f'🤖 Gemini AI Analysis</div>'
+        f'<div style="color:{THEME["text_secondary"]};font-size:0.75rem">'
+        f'Enter your Gemini API key to enable AI-powered explanations for flagged accounts '
+        f'in the Alerts & XAI tab.</div></div>',
+        unsafe_allow_html=True,
+    )
+    gemini_api_key = st.text_input(
+        "Gemini API Key",
+        type="password",
+        placeholder="AIza...",
+        help="Get a free key at https://aistudio.google.com/apikey",
+    )
+    if gemini_api_key:
+        gemini_model = st.selectbox(
+            "Select Gemini Model",
+            options=AVAILABLE_MODELS,
+            index=0,
+            help="If you hit rate limits with gemini-2.0-flash, try gemini-1.5-flash."
+        )
+    else:
+        gemini_model = "gemini-3-flash-preview"
 
 # Create top tab navigation
 tab_overview, tab_graph, tab_fl, tab_attack, tab_audit, tab_alerts = st.tabs([
@@ -1324,11 +1353,29 @@ def page_alerts_xai():
             f'</div></div>'
             f'<div style="margin-top:8px;color:{THEME["text_secondary"]};font-size:0.8rem">'
             f'<b>Bank:</b> {alert["Bank"]} | '
-            f'<b>Attn Weight:</b> {alert["Attention"]:.4f} | '
-            f'<b>Connected to:</b> {neighbor_text}'
-            f'</div></div>',
+        f'<b>Attn Weight:</b> {alert["Attention"]:.4f} | '
+        f'<b>Connected to:</b> {neighbor_text}'
+        f'</div></div>',
             unsafe_allow_html=True,
         )
+
+        # ── Gemini AI Analysis ────────────────────────────────────────
+        if gemini_api_key:
+            with st.expander(f"🤖 AI Analysis — Why is {alert['Account']} suspicious?"):
+                context = gather_account_context(
+                    alert["Account"], graph, scores, data_dict, attention_scores
+                )
+                with st.spinner(f"Generating AI analysis with {gemini_model}..."):
+                    summary = generate_suspicion_summary(gemini_api_key, context, model=gemini_model)
+                st.markdown(
+                    f'<div style="background:linear-gradient(135deg, rgba(0,240,255,0.06), rgba(139,92,246,0.04));'
+                    f'border:1px solid rgba(0,240,255,0.15);border-radius:12px;padding:16px;'
+                    f'color:{THEME["text_primary"]};font-size:0.9rem;line-height:1.7">'
+                    f'<span style="color:{THEME["accent_cyan"]};font-weight:600">🔍 Gemini Analysis:</span><br><br>'
+                    f'{summary}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
     st.markdown("")
 
