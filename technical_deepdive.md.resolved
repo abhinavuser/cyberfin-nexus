@@ -1,0 +1,256 @@
+# CyberFin Nexus — Technical Deep-Dive
+
+---
+
+## 1. THE DATA — What We Have
+
+[data_generator.py](file:///e:/VS%20Code/cyber/data_generator.py) creates **6 synthetic datasets**. Nothing is saved to disk — all generated in-memory at runtime (seeded for reproducibility).
+
+### Datasets
+
+| Dataset | Records | Key Columns |
+|---------|---------|-------------|
+| **Accounts** | 250 | `account_id`, `bank_id` (1–4), `is_mule`, `avg_balance`, `account_age_days`, `tx_velocity`, `avg_tx_amount` |
+| **Devices** | 60 | `device_id`, `os`, `browser`, `is_vpn`, `is_proxy`, `fingerprint_entropy` |
+| **Account↔Device Map** | ~400 | `account_id`, `device_id` — mules **share a smaller pool** of devices (suspicious reuse signal) |
+| **Cyber Events** | 500 | `event_id`, `account_id`, `device_id`, `attack_type` (phishing/malware/etc.), `severity`, `source_ip`, `is_vpn` |
+| **Transactions** | 2000 | `txn_id`, `from_account`, `to_account` (can be EXT_xxx), `amount`, `is_suspicious` |
+| **Mule Rings** | ~6 rings | `ring_id`, `account_id` — groups of mule accounts that form organized rings |
+
+### How Mules Differ from Legit Accounts
+
+| Feature | Legitimate | Mule |
+|---------|-----------|------|
+| Balance | $2K–$50K | $500–$5K |
+| Account Age | 180–3650 days | 10–180 days |
+| Tx Velocity | 0.1–3/day | 3–15/day |
+| Avg Tx Amount | $50–$3K | $2K–$15K |
+| Cyber events | 30% target | **70% target** |
+| Device sharing | Unique devices | **Shared device pool** (key signal) |
+
+---
+
+## 2. THE GRAPH — How Data Becomes a Network
+
+[graph_builder.py](file:///e:/VS%20Code/cyber/graph_builder.py) fuses all 6 datasets into a single **heterogeneous graph** (PyTorch Geometric `Data` object).
+
+### Nodes (3 types)
+- **Account nodes** (250) — one per bank account
+- **Device nodes** (60) — one per device fingerprint
+- **External nodes** (~variable) — external account IDs (`EXT_xxx`) from transactions
+
+### Edges (3 types)
+```
+Account ↔ Device    (bidirectional, from acc_dev_map)
+Account → Account   (from transactions)
+Account → External  (from transactions to EXT_ accounts)
+Account → Device    (from cyber events — which device was used during each attack)
+```
+
+### Node Features (8-dimensional vector per node)
+
+For **Account** nodes:
+1. **Cyber Risk** — mean attack severity from cyber events targeting this account
+2. **Balance** — normalized (÷50K)
+3. **Account Age** — normalized (÷3650 days)
+4. **Tx Velocity** — normalized (÷15 txns/day)
+5. **Avg Tx Amount** — normalized (÷$15K)
+6. **Device Count** — how many devices this account uses
+7. **VPN Frequency** — how often cyber events used VPN
+8. **Cyber Event Count** — normalized (÷20)
+
+For **Device** nodes: fingerprint_entropy, is_vpn, is_proxy, usage_count, then zeros.
+For **External** nodes: all zeros (unknown entities).
+
+### Labels
+- `y[i] = 1.0` if account is a mule, `0.0` if legit.
+- Only **account nodes** have labels (device/external nodes = 0).
+- `account_mask` boolean tensor tells us which nodes are accounts (for training loss and evaluation).
+
+### Why This Matters
+The graph structure lets the GNN "see" that **mule accounts share devices** and **connect to suspicious external endpoints** — patterns invisible to traditional per-transaction AML.
+
+---
+
+## 3. THE GNN — Graph Attention Network (GAT)
+
+[gat_model.py](file:///e:/VS%20Code/cyber/models/gat_model.py) implements a **3-layer GAT** that learns which connections matter most.
+
+### Architecture
+```
+Input (8 features)
+  → GATConv Layer 1: 8 → 32, 4 attention heads = 128-dim output
+    → BatchNorm → ELU → Dropout(0.3)
+  → GATConv Layer 2: 128 → 32, 4 attention heads = 128-dim output
+    → BatchNorm → ELU → Dropout(0.3)
+  → GATConv Layer 3: 128 → 32, 1 attention head = 32-dim output
+    → BatchNorm → ELU
+  → Linear Classifier: 32 → 1 → Sigmoid → Risk Score [0, 1]
+```
+
+### What GAT Actually Does
+
+Each GAT layer performs **attention-weighted message passing**:
+
+1. For each node, look at all its **neighbors** (connected via edges)
+2. Compute an **attention score** for each neighbor (how important is this connection?)
+3. Aggregate neighbor features weighted by attention scores
+4. This propagated information becomes the node's new embedding
+
+**Example**: If `ACC_1_0001` connects to `DEV_005` which also connects to `ACC_2_0050` (another mule), the GAT learns that the `ACC → DEV → ACC` path carries risk. The attention mechanism learns to **weight cyber-linked device connections higher** than normal transaction edges.
+
+### Training Process
+
+- **Loss**: Binary Cross-Entropy (mule vs. legit classification)
+- **Class Balancing**: `pos_weight = n_negative / n_positive` to handle 85/15 class imbalance
+- **Optimizer**: Adam with weight decay
+- **Early Stopping**: Patience of 15 epochs — stops when loss stops improving
+- **Only on account nodes**: Loss is computed only where `account_mask = True`
+
+### Output
+- Each node gets a **risk score [0, 1]**
+- Accounts with score > 0.5 are flagged
+- Achieves **AUC ≈ 0.983** — near-perfect discrimination
+
+### Explainability
+The [get_node_attention_scores()](file:///e:/VS%20Code/cyber/models/gat_model.py#104-127) method extracts per-node attention weights from the last forward pass, showing **which connections the model thinks are most suspicious**. This is the XAI feature shown in the dashboard.
+
+---
+
+## 4. FEDERATED LEARNING — Why and How
+
+[fl_engine.py](file:///e:/VS%20Code/cyber/federated/fl_engine.py) simulates cross-bank collaboration **without sharing any raw data**.
+
+### The Problem It Solves
+Banks can't share customer data (GDPR/DPDP). But mule rings span banks. Federated Learning lets each bank train locally, then share only **model weights** (numbers, not data).
+
+### How It Works — Step by Step
+
+```
+For each FL Round (10 rounds):
+  1. Central server sends current global model weights to all 4 banks
+  2. Each bank:
+     a. Creates a local copy of the global model
+     b. Trains it on ONLY their accounts (using bank_mask)
+     c. Clips gradients (max norm = 1.0) for DP
+     d. Adds Gaussian noise to the trained weights (DP mechanism)
+     e. Sends noisy weights back to server
+  3. Server averages all 4 banks' weights (FedAvg)
+  4. This average becomes the new global model
+  5. Evaluate global model on ALL accounts
+```
+
+### What Data Each Bank Sees
+- Bank 1 sees only accounts `ACC_1_xxxx` (their ~63 accounts)
+- Bank 2 sees only accounts `ACC_2_xxxx` etc.
+- BUT all banks train on the **full graph structure** — they can see the edges but only compute loss on their own accounts
+
+### Differential Privacy (DP)
+- **Epsilon (ε) = 1.0** — strong privacy guarantee
+- **Delta (δ) = 1e-5** — probability of privacy breach
+- **Mechanism**: Gaussian noise added to every floating-point model parameter before sharing
+- **Noise scale**: `σ = clip_norm × √(2·ln(1.25/δ)) / ε`
+- This mathematically guarantees no individual transaction can be reverse-engineered from the shared weights
+
+### Where Data Is Stored
+**Nothing is saved to disk**. The graph structure is partitioned in-memory using [partition_by_bank()](file:///e:/VS%20Code/cyber/graph_builder.py#154-175) which creates a `bank_mask` tensor per bank. The FL engine keeps the global model in memory. All metrics (per-round AUC, per-bank AUC) are stored in `self.round_metrics` (a Python list).
+
+---
+
+## 5. ADVERSARIAL SIMULATION (RL) — Stress-Testing the Model
+
+[adversarial_sim.py](file:///e:/VS%20Code/cyber/rl/adversarial_sim.py) simulates how criminals would **evolve** to evade the GNN.
+
+### Why It's Needed
+Fraudsters adapt. If our model catches high-velocity transactions, they'll slow down. The adversarial simulator tests 4 attack strategies and verifies our model can **adapt via retraining**.
+
+### The 4 Attack Strategies
+
+| Strategy | What Criminals Do | Which Features Mutated |
+|----------|------------------|----------------------|
+| **Velocity Reduction** | Slow down transactions to look normal | `tx_velocity` ↓40%, `cyber_risk` ×0.6 |
+| **Amount Splitting** | Break $10K into 10×$1K | `avg_tx_amount` ×0.3, `tx_velocity` ×1.5 |
+| **Device Rotation** | Stop reusing devices, stop VPN | `device_count` → random low, `vpn_freq` → 0 |
+| **Behavioral Mimicry** | Copy average legit account behavior (AI-assisted) | ALL features → legit mean + noise |
+
+### For Each Attack, the Simulator:
+1. **Baseline**: Evaluate model AUC on clean data
+2. **Apply attack**: Mutate mule node features in a deep copy of the graph
+3. **Evaluate under attack**: Run model on attacked graph → see AUC drop
+4. **Retrain (adaptation)**: Clone model, retrain 30 epochs on attacked data
+5. **Evaluate adapted model**: See how much AUC recovers
+
+### The RL Angle
+This isn't full RL with a reward function and policy network. It's a **simulation-based adversarial evaluation** inspired by RL concepts:
+- The "adversary" (attack strategies) is the "environment"
+- The "agent" (model retraining) adapts to the changed environment
+- The "resilience score" (`adapted_auc / baseline_auc`) measures how well the agent coped
+
+### Where Data Is Stored
+**In-memory only**. The attacked graph is a `copy.deepcopy()` of the original. Results are returned as Python dicts. Nothing persists to disk.
+
+---
+
+## 6. BLOCKCHAIN AUDIT TRAIL — Regulatory Compliance
+
+[audit_trail.py](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py) creates an **immutable hash chain** for forensic auditing.
+
+### Why It's Necessary
+Regulators (GDPR, DPDP, FinCEN) require:
+- **What did the model decide?** (block/flag/pass each transaction)
+- **When?** (timestamps)
+- **Based on what?** (risk scores, connected entities)
+- **Can anyone tamper with these records?** → **No** — the hash chain proves integrity
+
+### How the Hash Chain Works
+
+```
+Block 0 (GENESIS)
+  hash: SHA-256("block0 data")
+  previous_hash: "0"
+
+Block 1 (TRANSACTION_ASSESSMENT)
+  data: {txn_id, from_account, to_account, amount, risk_score, decision}
+  previous_hash: Block0.hash  ← links to previous
+  hash: SHA-256(index + timestamp + data + previous_hash)
+
+Block 2 (ALERT)
+  data: {alert_type, accounts, confidence, risk_amount}
+  previous_hash: Block1.hash  ← chained!
+  ...
+```
+
+If anyone modifies Block 1's data, its hash changes, which breaks Block 2's `previous_hash` link. [verify_integrity()](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py#136-151) checks every block's hash matches the next block's `previous_hash`.
+
+### What Gets Recorded (4 block types)
+
+| Block Type | Data Recorded | Count |
+|-----------|---------------|-------|
+| **TRANSACTION_ASSESSMENT** | txn_id, from/to accounts, amount, risk score, model decision (BLOCK/FLAG/PASS) | 100 (first 100 txns) |
+| **ALERT** | alert_type, accounts, confidence, risk_amount, details | ~20-30 high-risk accounts |
+| **MODEL_EVENT** | model name, training status | 1 (training complete) |
+| **RING_DETECTION** | ring_id, member accounts, confidence, estimated_total_risk | ~6 (one per ring) |
+
+### Where It's Stored
+**In-memory as a Python list of [AuditBlock](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py#19-48) objects**. The [export_json()](file:///e:/VS%20Code/cyber/blockchain/audit_trail.py#175-178) method serializes the entire chain for download. In the dashboard, there's a "📥 Export Full Audit Trail (JSON)" button that lets you download the full chain as a `.json` file.
+
+In production, this would be stored in a distributed ledger or database. For this demo, it's generated fresh each time the dashboard loads (cached via `@st.cache_resource`).
+
+---
+
+## End-to-End Data Flow
+
+```mermaid
+graph TD
+    A["data_generator.py<br/>250 accounts, 60 devices,<br/>2000 txns, 500 cyber events"] --> B["graph_builder.py<br/>Build heterogeneous PyG graph<br/>~800 nodes, ~5000 edges"]
+    B --> C["gat_model.py<br/>3-layer GAT training<br/>AUC ≈ 0.983"]
+    B --> D["fl_engine.py<br/>4-bank FL simulation<br/>ε=1.0 DP"]
+    C --> E["adversarial_sim.py<br/>4 attack strategies<br/>Resilience testing"]
+    C --> F["audit_trail.py<br/>SHA-256 hash chain<br/>~138 blocks"]
+    C --> G["app.py<br/>Streamlit Dashboard<br/>6 tabs"]
+    D --> G
+    E --> G
+    F --> G
+```
+
+All data is generated → transformed → consumed **in-memory**. No CSV files, no database, no saved model checkpoints. The `@st.cache_resource` decorator ensures data is generated once and reused across tab switches.
