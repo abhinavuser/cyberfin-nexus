@@ -885,9 +885,6 @@ def page_nexus_graph():
         ("🟢 Low Risk (<0.3)", THEME["risk_low"]),
         ("🟣 Device Node", THEME["accent_purple"]),
     ]
-    for col, (label, color) in zip(cols, legend_items):
-        col.markdown(f"<span style='color:{color};font-weight:600'>{label}</span>", unsafe_allow_html=True)
-
     # Top risk accounts table
     st.markdown('<div class="section-header"><h3>🎯 Top Risk Accounts</h3></div>', unsafe_allow_html=True)
     top_accounts = []
@@ -1353,7 +1350,7 @@ def page_alerts_xai():
     y_true = graph.y[graph.account_mask].numpy()
 
     # Get attention scores
-    attention_scores = model.get_node_attention_scores(graph.edge_index)
+    attention_scores = model.get_node_attention_scores(graph.num_nodes)
 
     # Top-N alerts
     n_display = st.slider("Number of Alerts to Display", 5, 30, 10)

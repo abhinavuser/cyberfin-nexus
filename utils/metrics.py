@@ -6,7 +6,8 @@ AUC, precision, recall, F1, confusion matrix helpers.
 import numpy as np
 from sklearn.metrics import (
     roc_auc_score, precision_score, recall_score, f1_score,
-    confusion_matrix, precision_recall_curve, average_precision_score
+    confusion_matrix, precision_recall_curve, average_precision_score,
+    accuracy_score
 )
 
 
@@ -26,6 +27,7 @@ def compute_all_metrics(y_true, y_scores, threshold=0.5):
     y_pred = (y_scores >= threshold).astype(int)
 
     auc = roc_auc_score(y_true, y_scores)
+    accuracy = accuracy_score(y_true, y_pred)
     precision = precision_score(y_true, y_pred, zero_division=0)
     recall = recall_score(y_true, y_pred, zero_division=0)
     f1 = f1_score(y_true, y_pred, zero_division=0)
@@ -35,6 +37,7 @@ def compute_all_metrics(y_true, y_scores, threshold=0.5):
 
     return {
         "auc": float(auc),
+        "accuracy": float(accuracy),
         "precision": float(precision),
         "recall": float(recall),
         "f1": float(f1),

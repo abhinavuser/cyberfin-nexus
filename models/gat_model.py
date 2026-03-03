@@ -101,13 +101,15 @@ class CyberFinGAT(nn.Module):
         """Return stored attention weights from last forward pass."""
         return self._attention_weights
 
-    def get_node_attention_scores(self, edge_index):
+    def get_node_attention_scores(self, num_nodes):
         """Compute per-node aggregated attention scores for explainability."""
         if "layer3" not in self._attention_weights:
             return None
 
         attn_edge_index, attn_weights = self._attention_weights["layer3"]
-        n_nodes = edge_index.max().item() + 1
+        
+        # Ensure array encompasses actual node count, not just nodes with edges
+        n_nodes = max(num_nodes, attn_edge_index.max().item() + 1)
 
         # Average incoming attention per node
         node_scores = torch.zeros(n_nodes)
