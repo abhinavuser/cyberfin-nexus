@@ -8,3 +8,6 @@ numpy
 scikit-learn
 matplotlib
 google-genai
+sqlalchemy
+psycopg2-binary
+python-dotenv

@@ -28,7 +28,7 @@ print(f"  Nodes: {graph.num_nodes}, Edges: {graph.edge_index.shape[1]}")
 print(f"  Features shape: {graph.x.shape}")
 print(f"  Account mask: {graph.account_mask.sum().item()} accounts")
 print(f"  Mule labels: {graph.y[graph.account_mask].sum().item():.0f} mules")
-assert graph.x.shape[1] == 8, "Expected 8 features"
+assert graph.x.shape[1] == 12, "Expected 12 features (8 base + 4 temporal)"
 assert graph.edge_index.shape[0] == 2, "Edge index should be 2xE"
 print("  ✅ Graph construction OK")
 
