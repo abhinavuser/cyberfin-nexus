@@ -6,7 +6,7 @@
 
 ---
 
-## 🎯 Problem
+## Problem
 
 - **SOC teams** detect phishing/malware but ignore financial patterns
 - **AML teams** flag suspicious transactions but miss cyber-attack chains
@@ -17,38 +17,47 @@
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-PostgreSQL ──► Heterogeneous Graph (12-dim features)
-                    │
-    ┌───────────────┼───────────────┐
-    │               │               │
-  GAT (60%)    Iso Forest (20%)  Rules (20%)
-    │               │               │
-    └───────────────┼───────────────┘
-                    │
-            Ensemble Scorer + Consensus
-                    │
-    ┌───────────────┼───────────────┐
-    │               │               │
- Community      Active          Adversarial
- Detection     Learning         RL Testing
-    │               │               │
-    └───────────────┼───────────────┘
-                    │
-         Blockchain Audit Trail
-                    │
-            7-Tab Dashboard
+WGAN-GP (100K synthetic accounts) ──► PostgreSQL
+                                          │
+                              Heterogeneous Graph (12-dim features)
+                                          │
+                     ┌────────────────────┼────────────────────┐
+                     │                    │                    │
+                  GAT (60%)        Iso Forest (20%)      Rules (20%)
+                     │                    │                    │
+                     └────────────────────┼────────────────────┘
+                                          │
+                               Ensemble Scorer + Consensus
+                                          │
+                     ┌────────────────────┼────────────────────┐
+                     │                    │                    │
+                Community            Active               Adversarial
+                Detection           Learning              RL Testing
+                     │                    │                    │
+                     └────────────────────┼────────────────────┘
+                                          │
+                        ┌─────────────────┼──────────────────┐
+                        │                                    │
+               Federated Learning                  Blockchain Audit Trail
+             (FedAvg + DP, 4 banks)               (SHA-256, tamper-proof)
+                        │                                    │
+                        └─────────────────┼──────────────────┘
+                                          │
+                                  7-Tab Dashboard
+                                 + Gemini AI (XAI)
 ```
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| 🕸️ **Cyber-Financial Graph** | Unified graph connecting accounts ↔ devices ↔ transactions ↔ cyber events |
+| 🎲 **WGAN-GP Data Generation** | Conditional Wasserstein GAN with Gradient Penalty generates 100K realistic accounts (51-dim features, 300 epochs) |
+| 🕸️ **Cyber-Financial Graph** | Unified heterogeneous graph connecting accounts ↔ devices ↔ transactions ↔ cyber events |
 | 🧠 **GAT Model** | 3-layer, 4-head Graph Attention Network (AUC: 0.983) |
 | 🛡️ **Ensemble Defense** | GAT + Isolation Forest + Rule-Based with 2-of-3 consensus |
 | 🔎 **Community Detection** | Louvain clustering discovers unknown cross-bank mule rings |
@@ -61,7 +70,7 @@ PostgreSQL ──► Heterogeneous Graph (12-dim features)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -113,7 +122,7 @@ python test_all.py
 
 ---
 
-## 📊 Performance
+## Performance
 
 | Metric | Value |
 |--------|-------|
@@ -126,7 +135,7 @@ python test_all.py
 
 ---
 
-## 🖥️ Dashboard Tabs
+## Dashboard Tabs
 
 1. **🏠 Overview** — Key metrics, training progress, risk distribution
 2. **🕸️ Nexus Graph** — Interactive network visualization with risk-colored nodes
@@ -138,8 +147,9 @@ python test_all.py
 
 ---
 
-## 🔧 Tech Stack
+## Tech Stack
 
+- **Data Generation**: WGAN-GP (Conditional Wasserstein GAN with Gradient Penalty)
 - **ML**: PyTorch, PyTorch Geometric, Scikit-learn
 - **Graph**: NetworkX (Louvain community detection)
 - **Privacy**: Custom FedAvg + Differential Privacy
@@ -150,14 +160,21 @@ python test_all.py
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── app.py                    # 7-tab Streamlit dashboard
-├── data_generator.py         # Synthetic data + DB seeding
+├── data_generator.py         # Schema-level data gen + DB seeding
 ├── graph_builder.py          # Heterogeneous graph (12-dim features)
 ├── test_all.py               # Integration tests
 ├── requirements.txt
+├── Data_Gen/                 # WGAN-GP data generation pipeline
+│   ├── data_prep.py          # Phase 1: Data preprocessing + encoding
+│   ├── model.py              # Phase 2: WGAN-GP architecture (Generator + Critic)
+│   ├── train.py              # Phase 3: WGAN-GP training loop (300 epochs)
+│   ├── generate.py           # Phase 4: Generate 100K accounts + relational data
+│   ├── merge.py              # Phase 5: Merge generated data
+│   └── validate.py           # Phase 6: Statistical validation of generated data
 ├── models/
 │   ├── gat_model.py          # 3-layer GAT
 │   └── ensemble.py           # IF + Rules + Ensemble
