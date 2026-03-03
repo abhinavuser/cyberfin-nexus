@@ -431,8 +431,32 @@ st.markdown(f"""
 
 @st.cache_data
 def load_data():
-    """Generate and cache synthetic data."""
-    return generate_all_data(seed=42)
+    """Fetch data from PostgreSQL database."""
+    from utils.db_manager import get_engine
+    
+    try:
+        engine = get_engine()
+        # Query tables from PostgreSQL
+        data_dict = {
+            "accounts": pd.read_sql("SELECT * FROM accounts", engine),
+            "devices": pd.read_sql("SELECT * FROM devices", engine),
+            "acc_dev_map": pd.read_sql("SELECT * FROM acc_dev_map", engine),
+            "cyber_events": pd.read_sql("SELECT * FROM cyber_events", engine),
+            "transactions": pd.read_sql("SELECT * FROM transactions", engine),
+            "mule_rings": pd.read_sql("SELECT * FROM mule_rings", engine),
+        }
+        
+        # Ensure timestamp columns are parsed as datetime if needed
+        data_dict["cyber_events"]["timestamp"] = pd.to_datetime(data_dict["cyber_events"]["timestamp"])
+        data_dict["transactions"]["timestamp"] = pd.to_datetime(data_dict["transactions"]["timestamp"])
+        
+        return data_dict
+        
+    except Exception as e:
+        # Fallback if DB isn't running or set up yet
+        st.error(f"⚠️ Failed to connect to PostgreSQL: {e}\n\nFalling back to live data generation. Please run `python data_generator.py` to seed the database.")
+        from data_generator import generate_all_data
+        return generate_all_data(seed=42)
 
 @st.cache_resource
 def load_model_and_graph():
@@ -494,8 +518,40 @@ else:
     st.markdown('<div class="glow-header">🛡️ CyberFin Nexus</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Privacy-First Cyber-Financial Fusion for Mule Ring Detection</div>', unsafe_allow_html=True)
 
-# ── Sidebar: Gemini API Key ──────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────────────────────────
 with st.sidebar:
+    # Check Database Connection Status Dynamically
+    from utils.db_manager import test_connection
+    is_db_connected = test_connection()
+    
+    if is_db_connected:
+        st.markdown(
+            f'<div style="padding:12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.2);'
+            f'border-radius:12px;margin-bottom:16px">'
+            f'<div style="color:{THEME["accent_green"]};font-weight:700;font-size:0.9rem;margin-bottom:4px">'
+            f'🟢 Database Connected</div>'
+            f'<div style="color:{THEME["text_secondary"]};font-size:0.75rem">'
+            f'Streaming live from PostgreSQL.</div></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div style="padding:12px;background:rgba(255,0,0,0.05);border:1px solid rgba(255,0,0,0.3);'
+            f'border-radius:12px;margin-bottom:16px">'
+            f'<div style="color:{THEME["risk_critical"]};font-weight:700;font-size:0.9rem;margin-bottom:4px">'
+            f'🔴 Database Disconnected</div>'
+            f'<div style="color:{THEME["text_secondary"]};font-size:0.75rem">'
+            f'Falling back to live generated data.</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    if st.button("🔄 Refresh Data", help="Clears the cache and fetches fresh data from the database", use_container_width=True):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
     st.markdown(
         f'<div style="padding:12px;background:rgba(0,240,255,0.05);border:1px solid rgba(0,240,255,0.15);'
         f'border-radius:12px;margin-bottom:16px">'

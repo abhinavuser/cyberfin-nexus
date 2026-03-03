@@ -258,8 +258,24 @@ def generate_all_data(seed=42):
 
 
 if __name__ == "__main__":
+    from utils.db_manager import get_engine
+    
+    print("🚀 Generating synthetic data in memory...")
     data = generate_all_data()
-    for name, df in data.items():
-        print(f"{name}: {df.shape}")
-        print(df.head(3))
-        print()
+    
+    print("⏳ Connecting to PostgreSQL database...")
+    try:
+        engine = get_engine()
+        
+        print("💾 Writing tables to database (this may take a moment)...")
+        for table_name, df in data.items():
+            print(f"  -> Writing table: {table_name} ({len(df)} rows)")
+            # Write to SQL. 'replace' drops the table if it exists and creates a new one.
+            df.to_sql(table_name, engine, if_exists="replace", index=False)
+            
+        print("✅ Successfully seeded PostgreSQL database with all tables!")
+        
+    except Exception as e:
+        print(f"❌ Error writing to database: {e}")
+        print("\nMake sure your PostgreSQL server is running and the 'cyberfin_db' database exists.")
+        print("You may need to update the password in the .env file.")
